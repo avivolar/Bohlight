@@ -1,220 +1,129 @@
-#include "Arduino.h"
-#include <SoftwareSerial.h>
+#include <SoftwareSerial.h>  
 #include <Adafruit_NeoPixel.h>
 
-//#define LED_PIN   5
-#define LED_PIN   6
-#define LED_COUNT 120
 
-Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+#define RxD 1
+#define TxD 0
 
-void setLeds(String message);
-String getNextNumber(String text, int cursor);
+#define PIN1 3
+#define PIN2 4
 
-const byte rxPin = 9;
-const byte txPin = 8; 
-SoftwareSerial BTSerial(rxPin, txPin);
+Adafruit_NeoPixel strip1 = Adafruit_NeoPixel(7, PIN1, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip2 = Adafruit_NeoPixel(9, PIN2, NEO_GRB + NEO_KHZ800);
 
-void setup() {
-  pinMode(rxPin, INPUT);
-  pinMode(txPin, OUTPUT);
-  BTSerial.begin(9600);
-  Serial.begin(9600);
-  strip.begin();
-  strip.show();
-  pinMode(LED_BUILTIN, OUTPUT);
-}
-const char ACTIVATE_TOKEN = 'a';
-bool WheelToken = false;
+uint16_t i, j, effect;
 
-const char START_TOKEN = '?';
-const char END_TOKEN = ';';
-const char DELIMIT_TOKEN = '&';
-const int CHAR_TIMEOUT = 20;
+#define DEBUG_ENABLED  1
+ 
+SoftwareSerial blueToothSerial(RxD,TxD);
 
-bool waitingForStartToken = true;
-String messageBuffer = "";
-String effect = "";
+void setup() 
+{ 
+  pinMode(RxD, INPUT);
+  pinMode(TxD, OUTPUT);
+  blueToothSerial.begin(9600);
 
-long lastRun = millis();
-bool outputValue = false;
+  strip1.begin();
+  strip1.setBrightness(50);
+  strip1.show();
 
-uint16_t i, j;
-
-void loop() {
-  char nextData;
+  strip2.begin();
+  strip2.setBrightness(50);
+  strip2.show();
   
-  if (Serial.available()) {
-    
-    if (waitingForStartToken) {
-      do {
-        nextData = Serial.read();
-      } while((nextData != START_TOKEN) && Serial.available());
-      if (nextData == START_TOKEN) {
-        Serial.println("message start");
-        waitingForStartToken = false;
+} 
+ 
+void loop() 
+{ 
+  char recived;
+  recived = blueToothSerial.read();
+
+  if (blueToothSerial.available()) 
+  {
+    //ColorWipes
+    if(recived=='r')
+    {
+      blueToothSerial.print("Red!\n");
+      colorWipe(strip1.Color(127, 0, 0), 1); // Red
+      ReversedcolorWipe(strip1.Color(0, 0, 0, 255), 50); // White RGBW
+    }
+
+    if(recived=='g')
+    {
+      blueToothSerial.print("Green!\n");
+      colorWipe(strip1.Color(255, 0, 0), 1); // Green
+      ReversedcolorWipe(strip1.Color(0, 0, 0, 255), 50); // White RGBW
+    }
+
+    if(recived=='b')
+    {
+      blueToothSerial.print("Blue!\n");
+      colorWipe(strip1.Color(64, 64, 64), 1); // Blue
+      ReversedcolorWipe(strip1.Color(0, 0, 0, 255), 50); // White RGBW
+    }
+
+    //PoliceMode
+    if (recived=='p')
+    {
+      for (int i=0; i<1; i++) {
+      blueToothSerial.print("Police!\n");
+      solidColor1(strip1.Color(255,0,0),1);
+      solidColor2(strip2.Color(0,0,255),1);
+      // delay(500);
+      // solidColor1(strip1.Color(0,0,255),1);
+      // solidColor2(strip2.Color(255,0,0),1);
+      // delay(500);
       }
+      // delay(1000);
+      // solidColor1(strip1.Color(0,0,0),1);
+      // solidColor2(strip2.Color(0,0,0),1);
     }
-
-    if(!waitingForStartToken && Serial.available()) {
-      do {
-        nextData = Serial.read();
-        Serial.println(nextData);
-        messageBuffer += nextData;
-      } while((nextData != END_TOKEN) && Serial.available());
-
-      if (nextData == END_TOKEN) {
-        messageBuffer = messageBuffer.substring(0, messageBuffer.length() - 1);
-        Serial.println("message complete - " + messageBuffer);
-        //?r=255&g=255&b=255&e=25&f=100;
-        //setLeds(messageBuffer);
-
-        //TODO: Read values for r, g, b, e and f
-        
-        effect = messageBuffer;
-        //Serial.println(effect);
-        messageBuffer = "";
-        waitingForStartToken = true;
-        WheelToken = false;
-      }
-
-//      if ((nextData ==  ACTIVATE_TOKEN) || (WheelToken == true)) {
-//         Serial.println("Inside rainbow");
-//         WheelToken = true;
-//         rainbowCycle(10);
-//         delay(1000);
-//      }
-       
-//      if (messageBuffer.length() > CHAR_TIMEOUT) {
-//        Serial.println("message data timeout - " + messageBuffer);
-//        messageBuffer = "";
-//        waitingForStartToken = true;
-//        WheelToken = false;
-//      }
-    }
+   } 
+  
+  delay(100);
+} 
  
-  }
-
-  if (effect == "") {
-  } else if (effect == "1") {
-    //rainbowCycle
-    for(i=0; i< strip.numPixels(); i++) {
-      strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + j) & 255));        
-    }
-    strip.show();
-
-    if (j < 256) {
-      j++;
-    } else {
-      j = 0;
-    }
-  } else if (effect ==  "2") {
-    //rainbow
-    for(i=0; i<strip.numPixels(); i++) {
-      strip.setPixelColor(i, Wheel((i+j) & 255));
-    }
-    strip.show();
-
-    if (j < 256) {
-      j++;
-    } else {
-      j = 0;
-    }
-  } else {
-    setLeds(effect);    
-    effect = "";
-  }
-
-    delay(10);
-}
-
-
-
-
-
-void setLeds(String message) {
-  int textCursor = 0;
-  int pixel = 0;
-  bool rgb0k = true;
-  String red = "";
-  String green = "";
-  String blue = "";
-
- if (message.startsWith("r=")) {
-  textCursor = 2;
-  red = getNextNumber(message, textCursor);
-  textCursor += red.length() + 1;
-  message=message.substring(textCursor);
- }
- 
- else {
-  rgb0k = false;
- }
-
-  if (message.startsWith("g=")) {
-    textCursor = 2;
-    green = getNextNumber(message, textCursor);
-    textCursor += green.length() + 1;
-    message=message.substring(textCursor);
-  }
-
- else {
-  rgb0k = false;
- }
-
-  if (message.startsWith("b=")) {
-    textCursor = 2;
-    blue = getNextNumber(message, textCursor);
-    textCursor += blue.length() + 1;
-    message=message.substring(textCursor);
-  }
-
- else {
-  rgb0k = false;
- }
- 
- if (rgb0k) {
-  Serial.println("red = " + red);
-  Serial.println("green = " + green);
-  Serial.println("blue = " + blue);
-  for(pixel = 0; pixel < LED_COUNT; pixel++) {
-    strip.setPixelColor(pixel, red.toInt(), green.toInt(), blue.toInt());
-  }
-  strip.show();
- }
-}
-
-String getNextNumber(String text, int textCursor) {
-  String number = "";
-  while((text[textCursor] >= '0') && (text[textCursor] <= '9') && (textCursor < text.length())){
-    number += text[textCursor];
-    textCursor ++;
-  }
-  return number;
-}
-
-//Added 
-void rainbowCycle(uint8_t wait) {
-  uint16_t i, j;
-
-  for(j=0; j<256*1; j++) { // 5 cycles of all colors on wheel
-    for(i=0; i< strip.numPixels(); i++) {
-      strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + j) & 255));
-    }
-    strip.show();
+void colorWipe(uint32_t c, uint8_t wait) 
+{
+  for(uint16_t i=6; i<strip1.numPixels(); i--) 
+  {
+    strip1.setPixelColor(i, c);
+    strip1.show();
     delay(wait);
+    delay(25);
+
   }
 }
 
-uint32_t Wheel(byte WheelPos) {
-  WheelPos = 255 - WheelPos;
-  if(WheelPos < 85) {
-    return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+void ReversedcolorWipe(uint32_t c, uint8_t wait) 
+{
+  for(uint16_t i=0; i<strip1.numPixels(); i++) {
+    strip1.setPixelColor(i, c);
+    strip1.show();
+    delay(wait);
+    delay(25);
+
   }
-  if(WheelPos < 170) {
-    WheelPos -= 85;
-    return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+}
+
+void solidColor1(uint32_t c, uint8_t wait)
+{
+  for (uint16_t i=0; i<strip1.numPixels(); i++) {
+    strip1.setPixelColor(i, c);
   }
-  WheelPos -= 170;
-  return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+
+    strip1.show();
+    delay(wait);
+    delay(25);
+}
+
+void solidColor2(uint32_t c, uint8_t wait)
+{
+  for (uint16_t i=0; i<strip2.numPixels(); i++) {
+    strip2.setPixelColor(i, c);
+  }
+
+    strip2.show();
+    delay(wait);
+    delay(25);
 }
